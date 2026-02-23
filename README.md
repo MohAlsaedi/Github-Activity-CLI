@@ -1,6 +1,7 @@
 GitHub Activity CLI (PHP)
 
 A simple command-line PHP tool that fetches and displays a user’s recent public activity from GitHub using the GitHub Events API.
+- The project idea from roadmap.sh: https://roadmap.sh/projects/github-user-activity
 
 ---
 
