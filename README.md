@@ -37,8 +37,8 @@ OUTPUT EXAMPLE
 
 ## Event Type                    Repository                               Date
 
-PushEvent                     torvalds/linux                           2026-02-24 12:10 UTC
-IssuesEvent                   torvalds/subsurface                      2026-02-23 09:45 UTC
+PushEvent                     Potato/linux                           2026-02-24 12:10 UTC
+IssuesEvent                   Potato/subsurface                      2026-02-23 09:45 UTC
 
 ---
 
@@ -72,13 +72,12 @@ github-activity.php   # Main CLI script
 README.md             # Documentation
 
 ---
+IDEA
+
+roadmap.sh: https://github.com/MohAlsaedi/Github-Activity-CLI
 
 AUTHOR
 
 Mohammed Alsaedi
 
----
 
-LICENSE
-
-MIT License — feel free to use and modify.
