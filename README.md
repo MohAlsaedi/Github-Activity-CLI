@@ -29,7 +29,7 @@ php github-activity.php <username>
 
 Example:
 
-php github-activity.php torvalds
+php github-activity.php Potato
 
 ---
 
