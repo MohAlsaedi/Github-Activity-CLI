@@ -1,57 +1,124 @@
 <?php
 
-/* Before we Assign a value for the variable name, we chek how many index in the $argv:*/   
-    try{
-        try{
-    if (!isset($argv[1])) {
-        throw new Exception("You didn't enter the username.\n");
-        } else {
-            // Syntax to be tested
-            $name = $argv[1];
-            echo "Hello, $name!\n";
-            // Github API URL 
-            $github_url = "https://api.github.com/users/$name/events";
+declare(strict_types=1);
 
-            // Defining HTTP Headers:
-            $options = [
-            
-            "http" => [
+// ─── Input Validation ────────────────────────────────────────────────────────
 
-                'ignore_errors' => true,
-                "header" => "User-Agent: PHP\r\n"
-                ]];
-
-            // Creating a Stream to Send The HTTP Request: 
-            $context = stream_context_create($options);
-            $sending_request= file_get_contents( $github_url,  false , $context);
-            }
-}catch (Exception $e){
-    die("Caught Exception: " . $e ->   getMessage(). "\n");
+if ($argc < 2 || trim($argv[1]) === '') {
+    fwrite(STDERR, "Usage: php github_activity.php <username>\n");
+    exit(1);
 }
-/*  Handling the HTTP Response To Check the Valid Responses */
-// This Line Means $statusCode = $http_response_header[0] otherwise empty string
-$statusLine = $http_response_header[0] ?? ''; 
-preg_match('{HTTP/\S*\s(\d{3})}', $statusLine, $match);
-$statusCode = $match[1] ?? null;
 
-// This Block To Check The Response Status code 
-if ($statusCode === "404"){
- throw new Exception("this username not Found! -_- " . PHP_EOL);
+$username = trim($argv[1]);
 
-}elseif($statusCode === "500"){
-    throw new Exception("Somthing happen even me I don't know ;)". PHP_EOL);
+// Basic validation: GitHub usernames are alphanumeric + hyphens, max 39 chars
+if (!preg_match('/^[a-zA-Z0-9-]{1,39}$/', $username)) {
+    fwrite(STDERR, "Error: Invalid GitHub username format.\n");
+    exit(1);
+}
 
-} else {
+// ─── HTTP Request ─────────────────────────────────────────────────────────────
 
-//  Display Block:
-$data = json_decode($sending_request, true);
+$url = "https://api.github.com/users/{$username}/events";
 
-foreach($data as $event){
+$options = [
+    'http' => [
+        'method'        => 'GET',
+        'header'        => "User-Agent: PHP-GitHub-CLI/1.0\r\nAccept: application/vnd.github+json\r\n",
+        'ignore_errors' => true,
+        'timeout'       => 10,
+    ],
+];
 
-    echo $event['type'] . "\t at \t" . $event["repo"]["name"]. "\t in \t" . $event["created_at"] . PHP_EOL;
-   
+$context  = stream_context_create($options);
+$response = @file_get_contents($url, false, $context);
+
+if ($response === false) {
+    fwrite(STDERR, "Error: Could not reach the GitHub API. Check your internet connection.\n");
+    exit(1);
+}
+
+// ─── Parse Status Code ────────────────────────────────────────────────────────
+
+$statusCode = parseStatusCode($http_response_header);
+
+// ─── Handle Response ──────────────────────────────────────────────────────────
+
+switch ($statusCode) {
+    case 200:
+        break; // All good, continue below
+
+    case 404:
+        fwrite(STDERR, "Error: Username '{$username}' not found on GitHub.\n");
+        exit(1);
+
+    case 403:
+        fwrite(STDERR, "Error: API rate limit exceeded. Please wait a moment and try again.\n");
+        exit(1);
+
+    case 401:
+        fwrite(STDERR, "Error: Unauthorized. Check your credentials.\n");
+        exit(1);
+
+    case 500:
+    case 502:
+    case 503:
+        fwrite(STDERR, "Error: GitHub is having server issues (HTTP {$statusCode}). Try again later.\n");
+        exit(1);
+
+    default:
+        fwrite(STDERR, "Error: Unexpected HTTP response: {$statusCode}.\n");
+        exit(1);
+}
+
+// ─── Decode JSON ──────────────────────────────────────────────────────────────
+
+$events = json_decode($response, true);
+
+if (json_last_error() !== JSON_ERROR_NONE) {
+    fwrite(STDERR, "Error: Failed to parse GitHub response: " . json_last_error_msg() . "\n");
+    exit(1);
+}
+
+if (empty($events)) {
+    echo "No recent public activity found for '{$username}'.\n";
+    exit(0);
+}
+
+// ─── Display Results ──────────────────────────────────────────────────────────
+
+echo str_pad("Event Type", 30) . str_pad("Repository", 40) . "Date" . "\n";
+echo str_repeat("-", 85) . "\n";
+
+foreach ($events as $event) {
+    $type    = $event['type']              ?? 'Unknown';
+    $repo    = $event['repo']['name']      ?? 'Unknown';
+    $date    = $event['created_at']        ?? 'Unknown';
+
+    // Make the date more human-readable
+    $date    = formatDate($date);
+
+    echo str_pad($type, 30) . str_pad($repo, 40) . $date . "\n";
+}
+
+// ─── Helper Functions ─────────────────────────────────────────────────────────
+
+function parseStatusCode(array $headers): int
+{
+    // $http_response_header[0] is always the status line e.g. "HTTP/1.1 200 OK"
+    if (preg_match('{HTTP/\S+\s(\d{3})}', $headers[0] ?? '', $match)) {
+        return (int) $match[1];
     }
+
+    return 0;
 }
-}catch(Exception $e){
-    die("Find an Exception: ". $e -> getMessage() . PHP_EOL);
+
+function formatDate(string $isoDate): string
+{
+    // GitHub returns ISO 8601 e.g. "2024-03-15T10:22:00Z"
+    $timestamp = strtotime($isoDate);
+
+    return $timestamp !== false
+        ? date('Y-m-d H:i', $timestamp) . ' UTC'
+        : $isoDate;
 }
